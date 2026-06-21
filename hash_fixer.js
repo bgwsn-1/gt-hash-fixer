@@ -81,57 +81,68 @@ class BufferReader {
 
 class BufferWriter {
     constructor() {
-        this.buffers = [];
+        this.buf = Buffer.alloc(1024 * 1024 * 4);
+        this.pos = 0;
+    }
+
+    ensureCapacity(bytes) {
+        if (this.pos + bytes > this.buf.length) {
+            const newBuf = Buffer.alloc(this.buf.length * 2);
+            this.buf.copy(newBuf, 0, 0, this.pos);
+            this.buf = newBuf;
+        }
     }
 
     uint8(val) {
-        const buf = Buffer.alloc(1);
-        buf.writeUInt8(val, 0);
-        this.buffers.push(buf);
+        this.ensureCapacity(1);
+        this.buf.writeUInt8(val, this.pos);
+        this.pos += 1;
     }
 
     int8(val) {
-        const buf = Buffer.alloc(1);
-        buf.writeInt8(val, 0);
-        this.buffers.push(buf);
+        this.ensureCapacity(1);
+        this.buf.writeInt8(val, this.pos);
+        this.pos += 1;
     }
 
     uint16(val) {
-        const buf = Buffer.alloc(2);
-        buf.writeUInt16LE(val, 0);
-        this.buffers.push(buf);
+        this.ensureCapacity(2);
+        this.buf.writeUInt16LE(val, this.pos);
+        this.pos += 2;
     }
 
     int16(val) {
-        const buf = Buffer.alloc(2);
-        buf.writeInt16LE(val, 0);
-        this.buffers.push(buf);
+        this.ensureCapacity(2);
+        this.buf.writeInt16LE(val, this.pos);
+        this.pos += 2;
     }
 
     uint32(val) {
-        const buf = Buffer.alloc(4);
-        buf.writeUInt32LE(val, 0);
-        this.buffers.push(buf);
+        this.ensureCapacity(4);
+        this.buf.writeUInt32LE(val, this.pos);
+        this.pos += 4;
     }
 
     int32(val) {
-        const buf = Buffer.alloc(4);
-        buf.writeInt32LE(val, 0);
-        this.buffers.push(buf);
+        this.ensureCapacity(4);
+        this.buf.writeInt32LE(val, this.pos);
+        this.pos += 4;
     }
 
     bytes(buf) {
-        this.buffers.push(buf);
+        this.ensureCapacity(buf.length);
+        buf.copy(this.buf, this.pos);
+        this.pos += buf.length;
     }
 
     string(str) {
         const buf = Buffer.from(str, 'latin1');
         this.uint16(buf.length);
-        this.buffers.push(buf);
+        this.bytes(buf);
     }
 
     toBuffer() {
-        return Buffer.concat(this.buffers);
+        return this.buf.subarray(0, this.pos);
     }
 }
 
@@ -379,8 +390,14 @@ function normalizeItemForVersion(item, targetVersion) {
     }
 }
 
+const resolvedPathsCache = new Map();
+const fileHashCache = new Map();
+
 function resolveCachePath(cacheDir, filePath) {
     if (!filePath) return null;
+    if (resolvedPathsCache.has(filePath)) {
+        return resolvedPathsCache.get(filePath);
+    }
     const normalizedPath = filePath.replace(/\\/g, '/');
     const possiblePaths = [
         path.join(cacheDir, normalizedPath),
@@ -391,11 +408,13 @@ function resolveCachePath(cacheDir, filePath) {
         if (fs.existsSync(p)) {
             try {
                 if (fs.statSync(p).isFile()) {
+                    resolvedPathsCache.set(filePath, p);
                     return p;
                 }
             } catch (e) { }
         }
     }
+    resolvedPathsCache.set(filePath, null);
     return null;
 }
 
@@ -439,8 +458,12 @@ function runFixer() {
         if (item.texture) {
             const resolvedPath = resolveCachePath(cacheDir, item.texture);
             if (resolvedPath) {
-                const fileBuf = fs.readFileSync(resolvedPath);
-                const computedHash = getProtonHash(fileBuf);
+                let computedHash = fileHashCache.get(resolvedPath);
+                if (computedHash === undefined) {
+                    const fileBuf = fs.readFileSync(resolvedPath);
+                    computedHash = getProtonHash(fileBuf);
+                    fileHashCache.set(resolvedPath, computedHash);
+                }
                 if (item.textureHash !== computedHash) {
                     console.log(`[Mismatch] Item ID ${item.itemId} (${item.name}): texture '${item.texture}' hash mismatch! Stored: ${item.textureHash}, Computed: ${computedHash}`);
                     updatesLog.push(`[${new Date().toISOString()}] Item ID ${item.itemId} (${item.name}): texture '${item.texture}' hash updated: ${item.textureHash} -> ${computedHash}`);
@@ -452,8 +475,12 @@ function runFixer() {
         if (item.extraFile) {
             const resolvedPath = resolveCachePath(cacheDir, item.extraFile);
             if (resolvedPath) {
-                const fileBuf = fs.readFileSync(resolvedPath);
-                const computedHash = getProtonHash(fileBuf);
+                let computedHash = fileHashCache.get(resolvedPath);
+                if (computedHash === undefined) {
+                    const fileBuf = fs.readFileSync(resolvedPath);
+                    computedHash = getProtonHash(fileBuf);
+                    fileHashCache.set(resolvedPath, computedHash);
+                }
                 if (item.extraFileHash !== computedHash) {
                     console.log(`[Mismatch] Item ID ${item.itemId} (${item.name}): extraFile '${item.extraFile}' hash mismatch! Stored: ${item.extraFileHash}, Computed: ${computedHash}`);
                     updatesLog.push(`[${new Date().toISOString()}] Item ID ${item.itemId} (${item.name}): extraFile '${item.extraFile}' hash updated: ${item.extraFileHash} -> ${computedHash}`);
