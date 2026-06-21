@@ -1,7 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-
-// Proton Hash calculation function (RTHash)
 function getProtonHash(buffer) {
     let hash = 0x55555555;
     for (let i = 0; i < buffer.length; i++) {
@@ -9,8 +7,6 @@ function getProtonHash(buffer) {
     }
     return hash;
 }
-
-// XOR cipher function for item name
 const KEY = "PBG892FXX982ABC*";
 function decryptName(buffer, itemId) {
     let name = "";
@@ -397,7 +393,7 @@ function resolveCachePath(cacheDir, filePath) {
                 if (fs.statSync(p).isFile()) {
                     return p;
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
     }
     return null;
@@ -440,7 +436,6 @@ function runFixer() {
     const updatesLog = [];
 
     for (const item of items) {
-        // 1. Check main texture hash (can be any extension)
         if (item.texture) {
             const resolvedPath = resolveCachePath(cacheDir, item.texture);
             if (resolvedPath) {
@@ -454,8 +449,6 @@ function runFixer() {
                 }
             }
         }
-
-        // 2. Check extraFile hash (can be xml, audio, etc.)
         if (item.extraFile) {
             const resolvedPath = resolveCachePath(cacheDir, item.extraFile);
             if (resolvedPath) {
@@ -479,8 +472,6 @@ function runFixer() {
     console.log(`- Fixed extra file hashes: ${fixedExtraFilesCount}`);
     console.log(`- Total hash modifications: ${totalFixes}`);
     console.log(`- Version check: Current version is ${version}. Target version is 26.`);
-
-    // Write update.txt log
     if (updatesLog.length > 0) {
         updatesLog.push(`\nTotal hash updates: ${totalFixes}`);
         fs.writeFileSync(updateLogPath, updatesLog.join('\n') + '\n');
@@ -490,7 +481,6 @@ function runFixer() {
     }
 
     if (totalFixes > 0 || shouldUpgrade) {
-        // Backup items.dat
         const backupPath = `${itemsDatPath}.bak`;
         console.log(`\nCreating backup of items.dat at: ${backupPath}`);
         fs.writeFileSync(backupPath, data);
@@ -499,8 +489,6 @@ function runFixer() {
         if (shouldUpgrade) {
             console.log(`Upgrading items.dat from version ${version} to version ${targetVersion}...`);
         }
-
-        // Serialize updated items
         console.log("Encoding updated items back to items.dat format...");
         const writer = new BufferWriter();
         writer.uint16(targetVersion);
@@ -518,8 +506,6 @@ function runFixer() {
         }
 
         const outputBuf = writer.toBuffer();
-        
-        // Safety verification: decode the written buffer and ensure lengths/names match
         try {
             const verifyReader = new BufferReader(outputBuf);
             const vVersion = verifyReader.uint16();
